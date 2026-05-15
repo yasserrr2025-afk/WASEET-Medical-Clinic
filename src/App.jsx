@@ -28,7 +28,14 @@ import {
   BarChart,
   ArrowUpRight,
   ArrowDownRight,
-  TrendingDown
+  TrendingDown,
+  Trophy,
+  Lightbulb,
+  Zap,
+  Target,
+  Award,
+  Crown,
+  Tags
 } from 'lucide-react';
 import {
   Chart as ChartJS,
@@ -263,6 +270,20 @@ const App = () => {
     const returningCount = Object.values(patientVisits).filter(v => v > 1).length;
     const newCount = unique - returningCount;
 
+    // Doctor specific loyalty (Returning patients per doctor)
+    const doctorLoyalty = filteredData.reduce((acc, curr) => {
+      if (!acc[curr.doctor]) acc[curr.doctor] = { total: 0, returning: new Set() };
+      acc[curr.doctor].total += (curr.visitCount || 1);
+      if (patientVisits[curr.fileNumber] > 1) {
+        acc[curr.doctor].returning.add(curr.fileNumber);
+      }
+      return acc;
+    }, {});
+
+    const topLoyalDoctor = Object.entries(doctorLoyalty)
+      .map(([name, stats]) => ({ name, rate: (stats.returning.size / stats.total) * 100 }))
+      .sort((a, b) => b.rate - a.rate)[0];
+
     // Peak Days Analysis
     const dayStats = { 'الأحد': 0, 'الاثنين': 0, 'الثلاثاء': 0, 'الأربعاء': 0, 'الخميس': 0, 'الجمعة': 0, 'السبت': 0 };
     const dayMap = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
@@ -273,7 +294,28 @@ const App = () => {
       }
     });
 
-    return { total, unique, repeats, doctorStats, clinicStats, returningCount, newCount, dayStats };
+    const busiestDay = Object.entries(dayStats).sort((a, b) => b[1] - a[1])[0];
+
+    // Keyword Analysis
+    const stopWords = ['في', 'من', 'على', 'إلى', 'عن', 'مع', 'هذا', 'كان', 'تم', 'لا', 'أو', 'و', '---', '|', '،'];
+    const keywords = {};
+    filteredData.forEach(d => {
+      if (d.notes) {
+        const words = d.notes.split(/[\s|،,]+/).filter(w => w.length > 2 && !stopWords.includes(w));
+        words.forEach(w => {
+          keywords[w] = (keywords[w] || 0) + 1;
+        });
+      }
+    });
+    const topKeywords = Object.entries(keywords).sort((a, b) => b[1] - a[1]).slice(0, 10);
+
+    const topClinic = Object.entries(clinicStats).sort((a, b) => b[1] - a[1])[0];
+
+    return { 
+      total, unique, repeats, doctorStats, clinicStats, 
+      returningCount, newCount, dayStats, busiestDay, 
+      topLoyalDoctor, topKeywords, topClinic 
+    };
   }, [filteredData]);
 
   const comparisonStats = useMemo(() => {
@@ -438,6 +480,28 @@ const App = () => {
 
               {activeTab === 'dashboard' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                  {/* Smart Insights Section */}
+                  <div className="card" style={{ background: 'rgba(99, 102, 241, 0.1)', border: '1px solid rgba(99, 102, 241, 0.2)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1.5rem' }}>
+                      <Lightbulb color="var(--primary)" />
+                      <h3 style={{ margin: 0 }}>الرؤى الذكية لخدمة المرضى</h3>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.5rem' }}>
+                      <div className="glass-panel" style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
+                        <Zap size={20} color="var(--accent)" />
+                        <p style={{ fontSize: '0.9rem', margin: 0 }}>يوم <strong>{stats.busiestDay[0]}</strong> هو الأكثر ازدحاماً بـ <strong>{stats.busiestDay[1]}</strong> زيارة. نقترح توزيع الكادر الطبي بناءً على ذلك.</p>
+                      </div>
+                      <div className="glass-panel" style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
+                        <Target size={20} color="var(--success)" />
+                        <p style={{ fontSize: '0.9rem', margin: 0 }}>عيادة <strong>{stats.topClinic[0]}</strong> تحتل الصدارة في استقطاب المرضى هذا الشهر.</p>
+                      </div>
+                      <div className="glass-panel" style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
+                        <Award size={20} color="var(--primary)" />
+                        <p style={{ fontSize: '0.9rem', margin: 0 }}>الدكتور <strong>{stats.topLoyalDoctor.name}</strong> يحقق أعلى نسبة ولاء مرضى (<strong>{stats.topLoyalDoctor.rate.toFixed(1)}%</strong>).</p>
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="report-grid">
                     <div className="card stat-card">
                       <p style={{ color: 'var(--text-muted)' }}>إجمالي المراجعات</p>
@@ -489,6 +553,38 @@ const App = () => {
                           }}
                           options={{ maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }}
                         />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Leaderboard Section */}
+                  <div className="card">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
+                      <Trophy color="var(--accent)" />
+                      <h3 style={{ margin: 0 }}>لوحة شرف الأطباء</h3>
+                    </div>
+                    <div className="report-grid">
+                      <div className="glass-panel" style={{ textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
+                        <Crown style={{ position: 'absolute', top: -10, right: -10, opacity: 0.1, transform: 'rotate(15deg)' }} size={100} />
+                        <p style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>الأعلى استقبالاً للحالات</p>
+                        <h4 style={{ fontSize: '1.2rem', color: 'var(--primary)' }}>{Object.entries(stats.doctorStats).sort((a, b) => b[1] - a[1])[0]?.[0]}</h4>
+                        <div className="badge" style={{ marginTop: '1rem', background: 'rgba(99, 102, 241, 0.2)', color: 'var(--primary)', padding: '0.5rem 1rem', borderRadius: '2rem', display: 'inline-block' }}>
+                          بطل الزيارات
+                        </div>
+                      </div>
+                      <div className="glass-panel" style={{ textAlign: 'center' }}>
+                        <p style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>الأعلى في ولاء المرضى</p>
+                        <h4 style={{ fontSize: '1.2rem', color: 'var(--success)' }}>{stats.topLoyalDoctor.name}</h4>
+                        <div className="badge" style={{ marginTop: '1rem', background: 'rgba(16, 185, 129, 0.2)', color: 'var(--success)', padding: '0.5rem 1rem', borderRadius: '2rem', display: 'inline-block' }}>
+                          كاسب الثقة
+                        </div>
+                      </div>
+                      <div className="glass-panel" style={{ textAlign: 'center' }}>
+                        <p style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>الأكثر تواجداً الأسبوعي</p>
+                        <h4 style={{ fontSize: '1.2rem', color: 'var(--accent)' }}>{Object.entries(stats.doctorStats).sort((a, b) => b[1] - a[1])[0]?.[0]}</h4>
+                        <div className="badge" style={{ marginTop: '1rem', background: 'rgba(236, 72, 153, 0.2)', color: 'var(--accent)', padding: '0.5rem 1rem', borderRadius: '2rem', display: 'inline-block' }}>
+                          درع الاستمرارية
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -654,6 +750,25 @@ const App = () => {
                         يرجى اختيار شهرين للمقارنة وعرض النتائج
                       </div>
                     )}
+                  </div>
+
+                  {/* Keyword Analysis Section */}
+                  <div className="card">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
+                      <Tags color="var(--primary)" />
+                      <h3>تحليل الكلمات المتكررة في الملاحظات</h3>
+                    </div>
+                    <p style={{ color: 'var(--text-muted)', marginBottom: '2rem' }}>يساعدك هذا التحليل على معرفة الإجراءات الطبية أو الشكاوى الأكثر تكراراً لتوفير المستلزمات اللازمة.</p>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
+                      {stats.topKeywords.length > 0 ? stats.topKeywords.map(([word, count]) => (
+                        <div key={word} className="glass-panel" style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.8rem 1.5rem' }}>
+                          <span style={{ fontWeight: 'bold', color: 'var(--primary)' }}>{word}</span>
+                          <span style={{ background: 'rgba(255,255,255,0.05)', padding: '0.2rem 0.6rem', borderRadius: '0.5rem', fontSize: '0.8rem' }}>{count} مرة</span>
+                        </div>
+                      )) : (
+                        <p style={{ color: 'var(--text-muted)' }}>لا توجد ملاحظات كافية للتحليل</p>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
