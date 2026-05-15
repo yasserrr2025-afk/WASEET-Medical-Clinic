@@ -23,7 +23,12 @@ import {
   Activity,
   UserCheck,
   Building,
-  Trash2
+  Trash2,
+  PieChart,
+  BarChart,
+  ArrowUpRight,
+  ArrowDownRight,
+  TrendingDown
 } from 'lucide-react';
 import {
   Chart as ChartJS,
@@ -58,6 +63,10 @@ const App = () => {
   const [selectedDoctor, setSelectedDoctor] = useState('الكل');
   const [selectedMonth, setSelectedMonth] = useState('الكل');
   const [error, setError] = useState(null);
+  
+  // Comparison State
+  const [compareMonthA, setCompareMonthA] = useState('الكل');
+  const [compareMonthB, setCompareMonthB] = useState('الكل');
 
   // Load data from localStorage on mount
   useEffect(() => {
@@ -246,8 +255,48 @@ const App = () => {
       return acc;
     }, {});
 
-    return { total, unique, repeats, doctorStats, clinicStats };
+    // Retention Analysis
+    const patientVisits = filteredData.reduce((acc, curr) => {
+      acc[curr.fileNumber] = (acc[curr.fileNumber] || 0) + 1;
+      return acc;
+    }, {});
+    const returningCount = Object.values(patientVisits).filter(v => v > 1).length;
+    const newCount = unique - returningCount;
+
+    // Peak Days Analysis
+    const dayStats = { 'الأحد': 0, 'الاثنين': 0, 'الثلاثاء': 0, 'الأربعاء': 0, 'الخميس': 0, 'الجمعة': 0, 'السبت': 0 };
+    const dayMap = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+    filteredData.forEach(d => {
+      if (d.date) {
+        const dayName = dayMap[d.date.getDay()];
+        dayStats[dayName] = (dayStats[dayName] || 0) + (d.visitCount || 1);
+      }
+    });
+
+    return { total, unique, repeats, doctorStats, clinicStats, returningCount, newCount, dayStats };
   }, [filteredData]);
+
+  const comparisonStats = useMemo(() => {
+    if (compareMonthA === 'الكل' || compareMonthB === 'الكل') return null;
+
+    const getDataForMonth = (m) => {
+      const mData = data.filter(d => `${d.date?.getFullYear()}-${(d.date?.getMonth() + 1).toString().padStart(2, '0')}` === m);
+      const visits = mData.reduce((sum, d) => sum + (d.visitCount || 1), 0);
+      const unique = new Set(mData.map(d => d.fileNumber)).size;
+      return { visits, unique };
+    };
+
+    const statsA = getDataForMonth(compareMonthA);
+    const statsB = getDataForMonth(compareMonthB);
+
+    return {
+      monthA: { name: compareMonthA, ...statsA },
+      monthB: { name: compareMonthB, ...statsB },
+      diffVisits: statsB.visits - statsA.visits,
+      diffUnique: statsB.unique - statsA.unique,
+      percentVisits: statsA.visits ? ((statsB.visits - statsA.visits) / statsA.visits * 100).toFixed(1) : 0
+    };
+  }, [data, compareMonthA, compareMonthB]);
 
   const handlePrint = () => window.print();
 
@@ -304,6 +353,7 @@ const App = () => {
             { id: 'dashboard', label: 'لوحة التحكم', icon: <BarChart3 size={20} /> },
             { id: 'patients', label: 'سجل المرضى', icon: <Users size={20} /> },
             { id: 'clinics', label: 'تقرير العيادات', icon: <Building size={20} /> },
+            { id: 'analytics', label: 'تحليلات متقدمة', icon: <TrendingUp size={20} /> },
             { id: 'doctors', label: 'تقرير الأطباء', icon: <Stethoscope size={20} /> },
             { id: 'reports', label: 'التقارير الشهرية', icon: <FileText size={20} /> },
             { id: 'upload', label: 'رفع البيانات', icon: <Upload size={20} /> },
@@ -501,6 +551,110 @@ const App = () => {
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {activeTab === 'analytics' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                  {/* Retention & Peak Days Row */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
+                    <div className="card">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
+                        <Repeat color="var(--primary)" />
+                        <h3>تحليل الاحتفاظ بالمرضى</h3>
+                      </div>
+                      <div style={{ height: '300px' }}>
+                        <Pie 
+                          data={{
+                            labels: ['مرضى جدد', 'مرضى عائدون'],
+                            datasets: [{
+                              data: [stats.newCount, stats.returningCount],
+                              backgroundColor: ['#6366f1', '#ec4899'],
+                              borderWidth: 0
+                            }]
+                          }}
+                          options={{ maintainAspectRatio: false }}
+                        />
+                      </div>
+                      <div style={{ marginTop: '2rem', textAlign: 'center' }}>
+                        <p style={{ color: 'var(--text-muted)' }}>نسبة العودة: <strong>{((stats.returningCount / stats.unique) * 100).toFixed(1)}%</strong></p>
+                      </div>
+                    </div>
+
+                    <div className="card">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
+                        <Calendar color="var(--accent)" />
+                        <h3>تحليل الأيام الأكثر ازدحاماً</h3>
+                      </div>
+                      <div style={{ height: '300px' }}>
+                        <Bar 
+                          data={{
+                            labels: Object.keys(stats.dayStats),
+                            datasets: [{
+                              label: 'عدد الزيارات',
+                              data: Object.values(stats.dayStats),
+                              backgroundColor: 'rgba(236, 72, 153, 0.6)',
+                              borderRadius: 5
+                            }]
+                          }}
+                          options={{ maintainAspectRatio: false }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Comparison Section */}
+                  <div className="card">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
+                      <PieChartIcon color="var(--success)" />
+                      <h3>مقارنة الأداء بين شهرين</h3>
+                    </div>
+                    
+                    <div style={{ display: 'flex', gap: '2rem', marginBottom: '3rem', alignItems: 'center' }}>
+                      <div style={{ flex: 1 }}>
+                        <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem' }}>الشهر الأول (الأساس)</label>
+                        <select className="glass-panel" style={{ width: '100%' }} value={compareMonthA} onChange={e => setCompareMonthA(e.target.value)}>
+                          {months.map(m => <option key={m} value={m}>{m}</option>)}
+                        </select>
+                      </div>
+                      <div style={{ fontSize: '1.5rem', paddingTop: '1.5rem' }}>VS</div>
+                      <div style={{ flex: 1 }}>
+                        <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem' }}>الشهر الثاني (المقارنة)</label>
+                        <select className="glass-panel" style={{ width: '100%' }} value={compareMonthB} onChange={e => setCompareMonthB(e.target.value)}>
+                          {months.map(m => <option key={m} value={m}>{m}</option>)}
+                        </select>
+                      </div>
+                    </div>
+
+                    {comparisonStats ? (
+                      <div className="report-grid">
+                        <div className="glass-panel" style={{ textAlign: 'center' }}>
+                          <p style={{ color: 'var(--text-muted)' }}>فرق الزيارات</p>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+                            <h2 style={{ fontSize: '2.5rem' }}>{Math.abs(comparisonStats.diffVisits)}</h2>
+                            {comparisonStats.diffVisits >= 0 ? <ArrowUpRight color="var(--success)" /> : <ArrowDownRight color="var(--danger)" />}
+                          </div>
+                          <p style={{ color: comparisonStats.diffVisits >= 0 ? 'var(--success)' : 'var(--danger)', fontWeight: 'bold' }}>
+                            {comparisonStats.percentVisits}% {comparisonStats.diffVisits >= 0 ? 'نمو' : 'تراجع'}
+                          </p>
+                        </div>
+                        <div className="glass-panel" style={{ textAlign: 'center' }}>
+                          <p style={{ color: 'var(--text-muted)' }}>إجمالي {comparisonStats.monthA.name}</p>
+                          <h2 style={{ fontSize: '2.5rem' }}>{comparisonStats.monthA.visits}</h2>
+                          <p style={{ fontSize: '0.8rem' }}>{comparisonStats.monthA.unique} مريض فريد</p>
+                        </div>
+                        <div className="glass-panel" style={{ textAlign: 'center' }}>
+                          <p style={{ color: 'var(--text-muted)' }}>إجمالي {comparisonStats.monthB.name}</p>
+                          <h2 style={{ fontSize: '2.5rem' }}>{comparisonStats.monthB.visits}</h2>
+                          <p style={{ fontSize: '0.8rem' }}>{comparisonStats.monthB.unique} مريض فريد</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)', border: '2px dashed var(--glass-border)', borderRadius: '1rem' }}>
+                        يرجى اختيار شهرين للمقارنة وعرض النتائج
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
