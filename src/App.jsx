@@ -22,7 +22,8 @@ import {
   MoreVertical,
   Activity,
   UserCheck,
-  Building
+  Building,
+  Trash2
 } from 'lucide-react';
 import {
   Chart as ChartJS,
@@ -57,6 +58,39 @@ const App = () => {
   const [selectedDoctor, setSelectedDoctor] = useState('الكل');
   const [selectedMonth, setSelectedMonth] = useState('الكل');
   const [error, setError] = useState(null);
+
+  // Load data from localStorage on mount
+  useEffect(() => {
+    const savedData = localStorage.getItem('patientData');
+    if (savedData) {
+      try {
+        const parsedData = JSON.parse(savedData);
+        // Convert date strings back to Date objects
+        const restoredData = parsedData.map(item => ({
+          ...item,
+          date: item.date ? new Date(item.date) : null
+        }));
+        setData(restoredData);
+      } catch (err) {
+        console.error("Failed to load data from localStorage", err);
+      }
+    }
+  }, []);
+
+  // Save data to localStorage whenever it changes
+  useEffect(() => {
+    if (data.length > 0) {
+      localStorage.setItem('patientData', JSON.stringify(data));
+    }
+  }, [data]);
+
+  const clearData = () => {
+    if (window.confirm('هل أنت متأكد من رغبتك في حذف جميع البيانات؟ لا يمكن التراجع عن هذه العملية.')) {
+      setData([]);
+      localStorage.removeItem('patientData');
+      setActiveTab('upload');
+    }
+  };
 
   const parseDate = (val) => {
     if (!val) return null;
@@ -175,17 +209,6 @@ const App = () => {
     reader.readAsBinaryString(file);
   };
 
-  const loadDemoData = () => {
-    const demo = [
-      { fileNumber: '17612', name: 'محمد العتيبي', doctor: 'د. خالد العمري', clinic: 'الأسنان', phone: '0501234567', date: new Date(2026, 4, 1), notes: 'متابعة حشو', visitCount: 2 },
-      { fileNumber: '92554', name: 'سارة القحطاني', doctor: 'د. هند المطيري', clinic: 'الباطنية', phone: '0559876543', date: new Date(2026, 4, 2), notes: 'فحص دوري', visitCount: 1 },
-      { fileNumber: '102531', name: 'أحمد الغامدي', doctor: 'د. خالد العمري', clinic: 'الأسنان', phone: '0543322110', date: new Date(2026, 4, 5), notes: 'ألم عصب', visitCount: 3 },
-      { fileNumber: '17612', name: 'محمد العتيبي', doctor: 'د. خالد العمري', clinic: 'الأسنان', phone: '0501234567', date: new Date(2026, 4, 15), notes: 'تركيب تاج', visitCount: 2 },
-      { fileNumber: '55643', name: 'ليلى الزهراني', doctor: 'د. منيرة الفهد', clinic: 'الأطفال', phone: '0567788990', date: new Date(2026, 5, 1), notes: 'تطعيم', visitCount: 1 },
-    ];
-    setData(demo);
-    setActiveTab('dashboard');
-  };
 
   // Memoized Data Processing
   const doctors = useMemo(() => ['الكل', ...new Set(data.map(d => d.doctor))], [data]);
@@ -294,6 +317,16 @@ const App = () => {
               {tab.icon} {tab.label}
             </button>
           ))}
+          
+          <div style={{ marginTop: 'auto', paddingTop: '1rem', borderTop: '1px solid var(--glass-border)' }}>
+            <button
+              className="btn"
+              style={{ justifyContent: 'flex-start', background: 'transparent', color: '#ff4d4d', width: '100%' }}
+              onClick={clearData}
+            >
+              <Trash2 size={20} /> حذف البيانات
+            </button>
+          </div>
         </nav>
       </aside>
 
@@ -315,10 +348,9 @@ const App = () => {
           <div className="card" style={{ textAlign: 'center', padding: '5rem' }}>
             <Activity size={60} color="var(--primary)" style={{ marginBottom: '2rem', opacity: 0.5 }} />
             <h2>لا توجد بيانات حالياً</h2>
-            <p style={{ color: 'var(--text-muted)', marginBottom: '2rem' }}>يرجى رفع ملف إكسل أو تجربة البيانات التوضيحية</p>
+            <p style={{ color: 'var(--text-muted)', marginBottom: '2rem' }}>يرجى رفع ملف إكسل للبدء في التحليل</p>
             <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
               <button className="btn btn-primary" onClick={() => setActiveTab('upload')}>رفع ملف</button>
-              <button className="btn glass-panel" onClick={loadDemoData}>تجربة البيانات</button>
             </div>
           </div>
         ) : (
